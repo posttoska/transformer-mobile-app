@@ -51,7 +51,7 @@ async def check_health():
 
 # post image
 @app.post("/post-image")
-async def post_image(file: UploadFile = File(...)):
+async def post_image(file: UploadFile = File(...)) -> list:
 
     # save file from frontend
     with open(file.filename, "wb") as buffer:
@@ -73,24 +73,21 @@ async def post_image(file: UploadFile = File(...)):
     # print(input_tensor)
 
     # call model
-    output = await model_call(input_tensor)
+    output_dict = await model_call(input_tensor)
 
     # proccess output (get detections: 0:boxes, 1:scores, 2:labels)
-    output = output['detections'][0]['boxes']
+    output_tensor = output_dict['detections'][0]['boxes']
 
     # convert torch tensor to simple list
-    output = [ [num.item() for num in row] for row in output]
-
-    # --- LOGGING ---
-    print(output)
+    output_list = [ [num.item() for num in row] for row in output_tensor]
 
     # get prediction back (DEMO)
-    return output
+    return output_list
 
 @app.post('/model-call')
 async def model_call(input_tensor):
     
-    # init model bellow 
+    # init model bellow
 
     # select device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -108,6 +105,6 @@ async def model_call(input_tensor):
 
     # call model
     with torch.no_grad():
-        output = model(input_tensor)
+        output_dict = model(input_tensor)
 
-    return output
+    return output_dict
