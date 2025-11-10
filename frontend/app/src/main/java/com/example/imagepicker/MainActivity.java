@@ -1,53 +1,20 @@
-// human code ----- : opening tag
-// ----- human code : closing tag
-
 package com.example.imagepicker;
 
 import android.Manifest;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.ParcelFileDescriptor;
 import android.provider.MediaStore;
 import android.view.View;
 import android.widget.ImageView;
 
-import android.view.ViewGroup;
-import org.json.JSONArray;
-import org.json.JSONObject;
-import okhttp3.*; // OkHttp
-import java.util.ArrayList;
-import java.util.List;
-import java.io.InputStream;
-import java.io.ByteArrayOutputStream;
-
-import android.view.ViewGroup;
-import com.example.imagepicker.BoxOverlayView;
-import android.content.Context;
-import android.graphics.*;
-import android.util.AttributeSet;
-import android.view.View;
-import java.util.ArrayList;
-import java.util.List;
-
-import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
-
-import java.io.FileDescriptor;
-import java.io.IOException;
 
 public class MainActivity extends AppCompatActivity {
 
-
-    // human code -----
     ImageView imageView;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,9 +23,7 @@ public class MainActivity extends AppCompatActivity {
 
         // create image view obj
         imageView = findViewById(R.id.imageView);
-        // ----- human code
 
-        // human code -----
         //TODO ask for permission of camera upon first launch of application
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
@@ -67,7 +32,6 @@ public class MainActivity extends AppCompatActivity {
                 requestPermissions(permission, 112);
             }
         }
-        // ----- human code
 
         //TODO chose image from gallery
         imageView.setOnClickListener(new View.OnClickListener() {
@@ -78,8 +42,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // human code -----
-        //TODO captue image using camera
+        //TODO capture image using camera
         imageView.setOnLongClickListener(new View.OnLongClickListener() {
             @Override
             public boolean onLongClick(View v) {
@@ -100,10 +63,8 @@ public class MainActivity extends AppCompatActivity {
                 return false;
             }
         });
-        // ----- human code
     };
 
-    // human code -----
     Uri image_uri;
     private static final int RESULT_LOAD_IMAGE = 123;
     public static final int IMAGE_CAPTURE_CODE = 654;
@@ -117,10 +78,8 @@ public class MainActivity extends AppCompatActivity {
         cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, image_uri);
         startActivityForResult(cameraIntent, IMAGE_CAPTURE_CODE);
     }
-    // ----- human code
 
 
-    // human code -----
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -129,7 +88,6 @@ public class MainActivity extends AppCompatActivity {
             imageView.setImageURI(image_uri);
         }
     }
-    // ----- human code
 
 
 }
