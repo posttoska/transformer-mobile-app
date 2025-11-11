@@ -1,24 +1,24 @@
 package com.example.imagepicker;
+
 import okhttp3.OkHttpClient;
-import okhttp3.logging.HttpLoggingInterceptor;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
 
 public class ApiClient {
-    private static Retrofit getRetrofit() {
+    private static Retrofit retrofit;
+    private static String BASE_URL = "http://127.0.0.1:8000/post-image";
 
-        HttpLoggingInterceptor httpLoggingInterceptor = new HttpLoggingInterceptor();
-        httpLoggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
+    public static Retrofit getRetrofit() {
+        OkHttpClient okHttpClient = new OkHttpClient.Builder().build();
 
-        OkHttpClient okHttpClient = new OkHttpClient.Builder().addInterceptor(httpLoggingInterceptor).build();
-
-        Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl("http://127.0.0.1:8000/post-image")
-                .addConverterFactory(GsonConverterFactory.create())
-                .client(okHttpClient)
-                .build();
-
+        if (retrofit == null) {
+            retrofit = new Retrofit.Builder()
+                    .baseUrl(BASE_URL)
+                    .addConverterFactory(GsonConverterFactory.create())
+                    .client(okHttpClient)
+                    .build();
+        }
         return retrofit;
     }
 }

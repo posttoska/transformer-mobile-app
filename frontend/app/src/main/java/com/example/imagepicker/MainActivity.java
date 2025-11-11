@@ -20,10 +20,19 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.RequestBody;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+import retrofit2.Retrofit;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -113,30 +122,15 @@ public class MainActivity extends AppCompatActivity {
             // display given image
             imageView.setImageBitmap(inputBmp);
 
+            // convert uri to string
+            String imgDir;
+            imgDir= image_uri.toString();
+
             // send to backend
-            if (requestCode == 1 || requestCode == RESULT_OK || data != null || data.getData() != null) {
-
-                try {
-                    // create input stream object
-                    InputStream inputStream = getContentResolver().openInputStream(image_uri);
-                    // create output stream object
-                    ByteArrayOutputStream stream = new ByteArrayOutputStream();
-
-                    // convert image to bitmap, specify uri
-                    Bitmap img = uriToBitmap(image_uri);
-                    // compress image
-                    img.compress(Bitmap.CompressFormat.JPEG, 100, stream);
-                    // convert to byte array
-                    byte [] imagebyte = stream.toByteArray();
-
-                } catch (FileNotFoundException e) {
-                    throw new RuntimeException(e);
-                }
-
-            }
+            uploadImage(imgDir);
 
         }
-    };
+    }
 
     // TODO take URI of the image and returns bitmap
     private Bitmap uriToBitmap(Uri selectedFileUri) {
@@ -155,6 +149,31 @@ public class MainActivity extends AppCompatActivity {
         return null;
     }
 
+    private void uploadImage(String imgDir) {
+        File file = new File(imgDir);
+        RequestBody requestBody = RequestBody.create(MediaType.parse("image/*"), file);
+        MultipartBody.Part parts = MultipartBody.Part.createFormData("newimage", file.getName(), requestBody);
 
+        RequestBody imageData = RequestBody.create(MediaType.parse("text/plain"), "New Image Title");
+
+        // get retrofit client
+        Retrofit retrofit = ApiClient.getRetrofit();
+        ApiUpload apiUpload = retrofit.create(ApiUpload.class);
+
+        // call api backend
+        Call call = apiUpload.uploadImage(parts, imageData);
+        call.enqueue(new Callback() {
+            @Override
+            public void onResponse(Call call, Response response) {
+
+            }
+
+            @Override
+            public void onFailure(Call call, Throwable t) {
+
+            }
+        });
+
+    };
 
 }
