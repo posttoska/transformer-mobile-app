@@ -18,8 +18,12 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import org.json.JSONObject;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.FileDescriptor;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -110,6 +114,26 @@ public class MainActivity extends AppCompatActivity {
             imageView.setImageBitmap(inputBmp);
 
             // send to backend
+            if (requestCode == 1 || requestCode == RESULT_OK || data != null || data.getData() != null) {
+
+                try {
+                    // create input stream object
+                    InputStream inputStream = getContentResolver().openInputStream(image_uri);
+                    // create output stream object
+                    ByteArrayOutputStream stream = new ByteArrayOutputStream();
+
+                    // convert image to bitmap, specify uri
+                    Bitmap img = uriToBitmap(image_uri);
+                    // compress image
+                    img.compress(Bitmap.CompressFormat.JPEG, 100, stream);
+                    // convert to byte array
+                    byte [] imagebyte = stream.toByteArray();
+
+                } catch (FileNotFoundException e) {
+                    throw new RuntimeException(e);
+                }
+
+            }
 
         }
     };

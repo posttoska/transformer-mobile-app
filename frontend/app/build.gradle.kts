@@ -43,8 +43,6 @@ dependencies {
     androidTestImplementation(libs.espresso.core)
     implementation("com.github.bumptech.glide:glide:4.16.0")
     annotationProcessor("com.github.bumptech.glide:compiler:4.16.0")
-    implementation("com.squareup.retrofit2:retrofit:3.1.0-SNAPSHOT")
-    implementation("com.squareup.retrofit2:converter-gson:3.1.0-SNAPSHOT")
-    implementation("com.squareup.okhttp3:logging-interceptor:5.3.0")
+    
 
 }
