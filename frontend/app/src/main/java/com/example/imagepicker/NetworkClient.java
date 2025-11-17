@@ -4,10 +4,9 @@ import okhttp3.OkHttpClient;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
-
-public class ApiClient {
+public class NetworkClient {
     private static Retrofit retrofit;
-    private static String BASE_URL = "http://127.0.0.1:8000/post-image";
+    private static String BASE_URL = "http://192.168.1.245:8000/";
 
     public static Retrofit getRetrofit() {
         OkHttpClient okHttpClient = new OkHttpClient.Builder().build();
@@ -16,8 +15,7 @@ public class ApiClient {
             retrofit = new Retrofit.Builder()
                     .baseUrl(BASE_URL)
                     .addConverterFactory(GsonConverterFactory.create())
-                    .client(okHttpClient)
-                    .build();
+                    .client(okHttpClient).build();
         }
         return retrofit;
     }

@@ -1,5 +1,6 @@
 # uvicorn main:app
 # uvicorn main:app --reload
+# uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 # main imports
 
@@ -52,6 +53,8 @@ async def check_health():
 # post image
 @app.post("/post-image")
 async def post_image(file: UploadFile = File(...)) -> list:
+
+    print("----- LOGGING -----")
 
     # save file from frontend
     with open(file.filename, "wb") as buffer:
