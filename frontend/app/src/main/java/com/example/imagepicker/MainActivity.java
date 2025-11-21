@@ -48,16 +48,16 @@ public class MainActivity extends AppCompatActivity {
         // create image view obj
         imageView = findViewById(R.id.imageView);
 
-        //TODO ask for permission of camera upon first launch of application
+        // TODO ask for permission of camera upon first launch of application
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            if (checkSelfPermission(Manifest.permission.CAMERA)  == PackageManager.PERMISSION_DENIED || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                     == PackageManager.PERMISSION_DENIED){
                 String[] permission = {Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE};
                 requestPermissions(permission, 112);
             }
         }
 
-        //TODO chose image from gallery
+        // TODO chose image from gallery
         imageView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -130,7 +130,7 @@ public class MainActivity extends AppCompatActivity {
             File outputDir = getCacheDir();
             // create temp file
             File tempFile = null;
-            tempFile = new File(outputDir, "upload_img.jpg");
+            tempFile = new File(outputDir, "upload_img.png");
 
             // make input stream
             try {
@@ -183,7 +183,13 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onResponse(Call call, Response response) {
 
-
+                if (response.isSuccessful()) {
+                    // handle the response
+                    Log.d("BackResponse", response.body().toString());
+                } else {
+                    // handle error
+                    Log.e("BackResponse", "Something went wrong");
+                }
             }
 
             @Override

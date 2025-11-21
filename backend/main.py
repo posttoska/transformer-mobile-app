@@ -1,6 +1,7 @@
 # uvicorn main:app
 # uvicorn main:app --reload
 # uvicorn main:app --reload --host 0.0.0.0 --port 8000
+# uvicorn main:app --reload --host 192.168.1.245 --port 8000
 
 # main imports
 
@@ -25,7 +26,8 @@ origins = [
     "http://localhost:4173",
     "http://localhost:4174",
     "http://localhost:3000",
-    "http://127.0.0.1:8000"
+    "http://127.0.0.1:8000",
+    "http://192.168.1.245:8000"
 ]
 
 # CORS middleware
@@ -54,8 +56,6 @@ async def check_health():
 @app.post("/post-image")
 async def post_image(file: UploadFile = File(...)) -> list:
 
-    print("----- LOGGING -----")
-
     # save file from frontend
     with open(file.filename, "wb") as buffer:
         buffer.write(file.file.read())
@@ -66,29 +66,49 @@ async def post_image(file: UploadFile = File(...)) -> list:
     # change cv2's BGR image to RGB image
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
+    # transform to 640x640
+    image = cv2.resize(image, (640, 640))
+
     # define a transform
     transform = transforms.Compose([transforms.ToTensor()])
 
     # convert the image to torch tensor
     input_tensor = transform(image)
 
-    # --- LOGGING ---
-    # print(input_tensor)
-
     # call model
-    output_dict = await model_call(input_tensor)
+    output_dict = model_call(input_tensor)
 
-    # proccess output (get detections: 0:boxes, 1:scores, 2:labels)
-    output_tensor = output_dict['detections'][0]['boxes']
 
+    # init output list [detections, scores, labels]
+    output_list = []
+
+    # proccess output (get detections (boxes): 0:boxes, 1:scores, 2:labels)
+    boxes_tensor = output_dict['detections'][0]['boxes']
     # convert torch tensor to simple list
-    output_list = [ [num.item() for num in row] for row in output_tensor]
+    boxes = [ [num.item() for num in row] for row in boxes_tensor]
+
+    # proccess output (get detections (scores): 0:boxes, 1:scores, 2:labels)
+    scores_tensor = output_dict['detections'][0]['scores']
+    # convert torch tensor to simple list
+    scores = [num.item() for num in scores_tensor]
+
+    # proccess output (get detections (labels): 0:boxes, 1:scores, 2:labels)
+    labels_tensor = output_dict['detections'][0]['labels']
+    # convert torch tensor to simple list
+    labels = [num.item() for num in labels_tensor]
+
+    # append stuff
+    output_list.append(boxes)
+    output_list.append(scores)
+    output_list.append(labels)
+
+    # LOGGING
+    print(output_list)
 
     # get prediction back (DEMO)
     return output_list
 
-@app.post('/model-call')
-async def model_call(input_tensor):
+def model_call(input_tensor):
     
     # init model bellow
 
