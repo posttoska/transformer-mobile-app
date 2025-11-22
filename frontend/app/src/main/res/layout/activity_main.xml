@@ -17,6 +17,7 @@
         android:layout_marginRight="15dp"
         android:padding="15dp"
         android:scaleType="fitCenter"
+        android:rotation="90"
         app:layout_constraintBottom_toTopOf="@+id/textView2"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.5"

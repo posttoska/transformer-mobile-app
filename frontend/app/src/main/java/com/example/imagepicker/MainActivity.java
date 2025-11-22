@@ -28,6 +28,8 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Collections;
+import java.util.List;
 
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
@@ -90,6 +92,7 @@ public class MainActivity extends AppCompatActivity {
     };
 
     Uri image_uri;
+    List detections;
     // capture image from gallery
     private static final int RESULT_LOAD_IMAGE = 123;
     // capture image by camera
@@ -124,7 +127,6 @@ public class MainActivity extends AppCompatActivity {
             // display given image
             imageView.setImageBitmap(inputBmp);
 
-
             // solution source: https://stackoverflow.com/questions/3425906/creating-temporary-files-in-android
             // context being the Activity pointer
             File outputDir = getCacheDir();
@@ -151,19 +153,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public static final String PREFIX = "stream2file";
-    public static final String SUFFIX = ".tmp";
-
-    // (source: https://stackoverflow.com/questions/4317035/how-to-convert-inputstream-to-virtual-file)
-    public static File stream2file (InputStream in) throws IOException {
-        final File tempFile = File.createTempFile(PREFIX, SUFFIX);
-        tempFile.deleteOnExit();
-        try (FileOutputStream out = new FileOutputStream(tempFile)) {
-            IOUtils.copy(in, out);
-        }
-        return tempFile;
-    }
-
     private void sendToBackend(File file) {
 
         // create request body
@@ -183,9 +172,16 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onResponse(Call call, Response response) {
 
+
                 if (response.isSuccessful()) {
                     // handle the response
-                    Log.d("BackResponse", response.body().toString());
+                    // Log.d("BackResponse", response.body().toString());
+
+                    // insert detections
+                    detections = (List) response.body();
+                    // logging
+                    Log.d("BackResponseDetections", detections.toString());
+
                 } else {
                     // handle error
                     Log.e("BackResponse", "Something went wrong");
