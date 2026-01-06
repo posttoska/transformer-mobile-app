@@ -144,3 +144,6 @@ dist
 # specific images
 vladislaviy.png
 stored_data.json
+
+# model weights
+*.pth
