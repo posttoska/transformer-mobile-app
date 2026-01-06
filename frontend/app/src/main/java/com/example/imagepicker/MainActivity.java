@@ -39,9 +39,27 @@ import retrofit2.Callback;
 import retrofit2.Response;
 import retrofit2.Retrofit;
 
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.RectF;
+import android.os.Bundle;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import androidx.appcompat.app.AppCompatActivity;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
 public class MainActivity extends AppCompatActivity {
 
     ImageView imageView;
+
+    FrameLayout imageLayer;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -49,6 +67,9 @@ public class MainActivity extends AppCompatActivity {
 
         // create image view obj
         imageView = findViewById(R.id.imageView);
+
+        // create overlay obj
+        imageLayer = findViewById(R.id.imageLayer);
 
         // TODO ask for permission of camera upon first launch of application
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -182,6 +203,9 @@ public class MainActivity extends AppCompatActivity {
                     // logging
                     Log.d("BackResponseDetections", detections.toString());
 
+                    // create mask
+                    createMaskOverlay(detections);
+
                 } else {
                     // handle error
                     Log.e("BackResponse", "Something went wrong");
@@ -190,11 +214,69 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onFailure(Call call, Throwable t) {
-
+                throw new RuntimeException(t);
             }
         });
 
     };
+
+    private void createMaskOverlay(List detections_list) {
+
+
+        List<List<Double>> boxes1 = (List<List<Double>>) detections_list.get(0);
+        List<Number> scores1 = (List<Number>) detections_list.get(1);
+        List<Number> labels1 = (List<Number>) detections_list.get(2);
+
+        List<String> labels_names = new ArrayList<>();
+        List<List<Double>> boxes_reduced = new ArrayList<>();
+        List<Float> scores_reduced = new ArrayList<>();
+        List<String> labels_reduced = new ArrayList<>();
+
+        if (detections_list != null && !detections_list.isEmpty()) {
+
+            String[] names = {"background", "aeroplane", "bicycle",
+                    "bird", "boat", "bottle", "bus", "car",
+                    "cat", "chair", "cow", "diningtable", "dog",
+                    "horse", "motorbike", "person", "pottedplant",
+                    "sheep", "sofa", "train", "tvmonitor", "cup",
+                    "apple"};
+
+            float trsh = 0.5f;
+
+            for (int i = 0; i < labels1.size(); i++) {
+                // get current index from name
+                int digital_name = labels1.get(i).intValue();
+                float score = scores1.get(i).floatValue();
+
+                String real_name = names[digital_name];
+
+                // delete all backgound items from 3 arrays
+                // delete small scored items from 3 arrays
+                if (!real_name.equals("background") && score > trsh) {
+                    boxes_reduced.add(boxes1.get(i));
+                    scores_reduced.add(scores1.get(i).floatValue());
+                    labels_reduced.add(real_name);
+                }
+            }
+
+        } else {
+            System.out.println("The list is empty or null");
+        }
+
+        Log.d("BackResponseDetections", boxes_reduced.toString());
+        Log.d("BackResponseDetections", scores_reduced.toString());
+        Log.d("BackResponseDetections", labels_reduced.toString());
+
+        // create overlay instance
+        MyBBoxView bboxView = new MyBBoxView(this, detections_list);
+
+        // make overlay
+        imageLayer.addView(bboxView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+
+    }
 
     // TODO take URI of the image and returns bitmap
     private Bitmap uriToBitmap(Uri selectedFileUri) {

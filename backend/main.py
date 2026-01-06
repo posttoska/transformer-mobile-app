@@ -1,7 +1,7 @@
 # uvicorn main:app
 # uvicorn main:app --reload
 # uvicorn main:app --reload --host 0.0.0.0 --port 8000
-# uvicorn main:app --reload --host 192.168.1.245 --port 8000
+# uvicorn main:app --reload --host 192.168.1.177 --port 8000
 
 # main imports
 
@@ -78,7 +78,6 @@ async def post_image(file: UploadFile = File(...)) -> list:
     # call model
     output_dict = model_call(input_tensor)
 
-
     # init output list [detections, scores, labels]
     output_list = []
 
@@ -105,7 +104,7 @@ async def post_image(file: UploadFile = File(...)) -> list:
     # LOGGING
     print(output_list)
 
-    # get prediction back (DEMO)
+    # get prediction back
     return output_list
 
 def model_call(input_tensor):
@@ -119,15 +118,26 @@ def model_call(input_tensor):
     config = CONFIG
 
     # additional setup
-    num_classes = 21
+    num_classes = 23
     bg_class_idx = num_classes - 1
 
     # init model
     model = DETR(config, num_classes=num_classes, bg_class_idx=bg_class_idx).to(device)
-    model.training = False
+    
+    # specify weights path
+    pth_path = r"C:\Users\posttoska\Documents\transformer-mobile-app\backend\model\weights\detr_voc23cls_plus_mydata_ep800.pth"
+
+    # define state
+    state = torch.load(pth_path, map_location=device)
+
+    # load state
+    model.load_state_dict(state, strict=True)
+
+    # select inference mode
+    model.eval()
 
     # call model
-    with torch.no_grad():
+    with torch.inference_mode():
         output_dict = model(input_tensor)
 
     return output_dict
