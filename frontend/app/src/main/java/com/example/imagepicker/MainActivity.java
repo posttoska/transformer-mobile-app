@@ -234,14 +234,13 @@ public class MainActivity extends AppCompatActivity {
 
         if (detections_list != null && !detections_list.isEmpty()) {
 
-            String[] names = {"background", "aeroplane", "bicycle",
-                    "bird", "boat", "bottle", "bus", "car",
-                    "cat", "chair", "cow", "diningtable", "dog",
-                    "horse", "motorbike", "person", "pottedplant",
-                    "sheep", "sofa", "train", "tvmonitor", "cup",
-                    "apple"};
+            String[] names = {"background", "person", "bird", "cat",
+                     "cow", "dog","horse", "sheep", "aeroplane",
+                    "bicycle",  "boat", "bus", "car", "motorbike",
+                    "train", "bottle", "chair", "diningtable",
+                    "pottedplant", "sofa", "tvmonitor", "apple", "cup"};
 
-            float trsh = 0.5f;
+            float trsh = 0.7f;
 
             for (int i = 0; i < labels1.size(); i++) {
                 // get current index from name
