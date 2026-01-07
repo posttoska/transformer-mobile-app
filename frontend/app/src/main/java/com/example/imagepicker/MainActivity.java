@@ -231,6 +231,7 @@ public class MainActivity extends AppCompatActivity {
         List<List<Double>> boxes_reduced = new ArrayList<>();
         List<Float> scores_reduced = new ArrayList<>();
         List<String> labels_reduced = new ArrayList<>();
+        List<List> detections_reduced = new ArrayList<>();
 
         if (detections_list != null && !detections_list.isEmpty()) {
 
@@ -262,19 +263,23 @@ public class MainActivity extends AppCompatActivity {
             System.out.println("The list is empty or null");
         }
 
-        Log.d("BackResponseDetections", boxes_reduced.toString());
-        Log.d("BackResponseDetections", scores_reduced.toString());
-        Log.d("BackResponseDetections", labels_reduced.toString());
+//        Log.d("BackResponseDetections", boxes_reduced.toString());
+//        Log.d("BackResponseDetections", scores_reduced.toString());
+//        Log.d("BackResponseDetections", labels_reduced.toString());
+
+        // append reduced detections
+        detections_reduced.add(boxes_reduced);
+        detections_reduced.add(scores_reduced);
+        detections_reduced.add(labels_reduced);
 
         // create overlay instance
-        MyBBoxView bboxView = new MyBBoxView(this, detections_list);
+        MyBBoxView bboxView = new MyBBoxView(this, detections_reduced);
 
         // make overlay
         imageLayer.addView(bboxView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
         ));
-
     }
 
     // TODO take URI of the image and returns bitmap
