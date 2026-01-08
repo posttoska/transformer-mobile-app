@@ -142,14 +142,14 @@ public class MainActivity extends AppCompatActivity {
 
         // check response
         if (resultCode == RESULT_OK) {
+            
+            // horizontal rotation problem
+            if (image_uri == null) return;
 
             // get image uri if it was captured from gallery
             if (requestCode == RESULT_LOAD_IMAGE){
                 image_uri = data.getData();
             }
-
-            // horizontal rotation problem
-            if (image_uri == null) return;
 
             // convert image into bitmap
             Bitmap inputBmp = uriToBitmap(image_uri);
