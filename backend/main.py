@@ -141,3 +141,4 @@ def model_call(input_tensor):
         output_dict = model(input_tensor)
 
     return output_dict
+

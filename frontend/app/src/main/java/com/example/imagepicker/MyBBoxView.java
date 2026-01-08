@@ -49,11 +49,11 @@ public class MyBBoxView extends View {
         // draw text
         textPaint.setColor(Color.WHITE);
         // adjust text size
-        textPaint.setTextSize(50);
+        textPaint.setTextSize(10);
 
         // get image size
-        int x_width = 1;
-        int y_height = 1;
+        int x_width = getWidth();
+        int y_height = getHeight();
 
         // init temp variables
         List<Double> current_bbox;
@@ -65,6 +65,8 @@ public class MyBBoxView extends View {
         float y0_coord_top;
         float x1_coord_right;
         float y1_coord_bottom;
+
+        int offset_val = 10;
 
         // make bbox algorithm
         for (int i = 0; i < scores_reduced.size(); i++) {
@@ -78,15 +80,16 @@ public class MyBBoxView extends View {
             x0_coord_left = current_bbox.get(0).floatValue();
             y0_coord_top = current_bbox.get(1).floatValue();
             x1_coord_right = current_bbox.get(2).floatValue();
-            y1_coord_bottom= current_bbox.get(3).floatValue();
+            y1_coord_bottom = current_bbox.get(3).floatValue();
 
             // insert data
             canvas.drawRect(x_width*x0_coord_left, y_height*y0_coord_top,
-                    x_width*x1_coord_right, y_height*y1_coord_bottom, boxPaint);
-            // percent text
-            canvas.drawText("Percents1", 0, 340, textPaint);
-            // class text
-            canvas.drawText("Class1", 120, 180, textPaint);
+                           x_width*x1_coord_right, y_height*y1_coord_bottom, boxPaint);
+
+            // score text
+            canvas.drawText(String.valueOf(current_score), x_width*x0_coord_left - offset_val, (y_height*y0_coord_top) - offset_val, textPaint);
+            // label text
+            canvas.drawText(String.valueOf(current_label), x_width*x1_coord_right - offset_val, y_height*y0_coord_top - offset_val, textPaint);
         }
 
 

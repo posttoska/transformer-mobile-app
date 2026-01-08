@@ -1,11 +1,14 @@
 package com.example.imagepicker;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
+import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -59,6 +62,8 @@ public class MainActivity extends AppCompatActivity {
     ImageView imageView;
 
     FrameLayout imageLayer;
+
+    private MyBBoxView bboxView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -143,8 +148,15 @@ public class MainActivity extends AppCompatActivity {
                 image_uri = data.getData();
             }
 
+            // horizontal rotation problem
+            if (image_uri == null) return;
+
             // convert image into bitmap
             Bitmap inputBmp = uriToBitmap(image_uri);
+
+            // make appropriate rotation
+            inputBmp = rotateImage(inputBmp, image_uri);
+
             // display given image
             imageView.setImageBitmap(inputBmp);
 
@@ -217,11 +229,17 @@ public class MainActivity extends AppCompatActivity {
                 throw new RuntimeException(t);
             }
         });
-
     };
 
     private void createMaskOverlay(List detections_list) {
 
+        // 1) delete previous overlay
+        if (bboxView != null) {
+            imageLayer.removeView(bboxView);
+            bboxView = null;
+        } else {
+
+        }
 
         List<List<Double>> boxes1 = (List<List<Double>>) detections_list.get(0);
         List<Number> scores1 = (List<Number>) detections_list.get(1);
@@ -273,7 +291,7 @@ public class MainActivity extends AppCompatActivity {
         detections_reduced.add(labels_reduced);
 
         // create overlay instance
-        MyBBoxView bboxView = new MyBBoxView(this, detections_reduced);
+        bboxView = new MyBBoxView(this, detections_reduced);
 
         // make overlay
         imageLayer.addView(bboxView, new FrameLayout.LayoutParams(
@@ -297,6 +315,46 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
         return null;
+    }
+
+    // auto rotation reduction
+    @SuppressLint("NewApi")
+    private Bitmap rotateImage(Bitmap bitmap, Uri uri) {
+        // init exif interface
+        ExifInterface exifInterface;
+        // try to get image exif
+        try (InputStream in = getContentResolver().openInputStream(uri)) {
+            // get exif interface exif
+            exifInterface = new ExifInterface(in);
+        // catch file not found
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        // catch input output exception
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        // get image orientation value as int
+        int orientation = exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED);
+
+        // create matrix to rotate image
+        Matrix matrix = new Matrix();
+
+        // different rotation cases
+        switch (orientation) {
+            // if image is 90 degree rotated -> unrotate it for 90 degrees (only matrix for now)
+            case ExifInterface.ORIENTATION_ROTATE_90:
+                matrix.setRotate(90);
+                break;
+            // if image is 180 degree rotated -> unrotate it for 180 degrees (only matrix for now)
+            case ExifInterface.ORIENTATION_ROTATE_180:
+                matrix.setRotate(180);
+                break;
+            default:
+                matrix.setRotate(0);
+        }
+        // now create new rotated bitmap image with rotation matrix
+        Bitmap rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+        return rotatedBitmap;
     }
 
 
