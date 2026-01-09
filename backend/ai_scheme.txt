@@ -1,0 +1,1313 @@
+
+промпт:
+
+теперь все работает, есть баги, но в целом все хорошо,
+от тебя требуется просто просмотреть и запомнить новую структуру приложения,
+не предлагай улучшений и ничего не исправляй, просто просмотри новую структуру:
+
+
+├─ transformer-mobile-app
+
+    ├─ backend
+        ├─ main.py
+        ├─ upload_img.png
+        ├─ model
+            ├─ weights
+                ├─ detr_voc23cls_plus_mydata_ep800.pth
+            ├─ config.py
+            ├─ detr.py
+
+
+    ├─ frontend
+        ├─.gradle
+            ├─ 8.13
+            ├─ buildOutputCleanup
+            ├─ vcs-1
+            ├─ config.properties
+            ├─ file-system.probe
+
+        ├─.idea
+            ├─ ...
+
+        ├─ app
+            ├─ build
+                ├─ generated
+                ├─ intermediates
+                ├─ outputs
+                ├─ tmp
+            ├─ src
+                ├─ androidTest
+                    ├─ java
+                        ├─ com
+                            ├─ example
+                                ├─ imagepicker
+                                    ├─ ExampleInstrumentedTest.java
+
+                ├─ main
+                    ├─ java
+                        ├─ com
+                            ├─ example
+                                ├─ imagepicker
+                                    ├─ MainActivity.java
+                                    ├─ MyBBoxView.java
+                                    ├─ NetworkClient.java
+                                    ├─ UploadAPI.java
+                ├─ test
+                    ├─ java
+                        ├─ com
+                            ├─ example
+                                ├─ imagepicker
+                                    ├─ ExampleUnitTest.java
+
+        ├─ build
+            ├─ reports
+                ├─ problems
+                    ├─ problems-report.html
+        ├─ gradle
+            ├─ libs.versions.toml
+            ├─ wrapper
+                ├─ gradle-wrapper.jar
+                ├─ gradle-wrapper.properties
+        
+
+# content of files:
+
+# 1. backend part
+
+
+
+
+
+---------- "C:\Users\posttoska\Documents\transformer-mobile-app\backend\main.py" ----------:
+
+
+
+# uvicorn main:app
+# uvicorn main:app --reload
+# uvicorn main:app --reload --host 0.0.0.0 --port 8000
+# uvicorn main:app --reload --host 192.168.1.177 --port 8000
+
+# main imports
+
+import json
+import os
+import cv2
+import torch
+import torchvision.transforms as transforms
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request
+from model.detr import DETR
+from model.config import CONFIG
+
+
+# init app
+app = FastAPI()
+
+# CORS (Cross-Origin Resource Sharing) - resourses we're accepting
+origins = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:4173",
+    "http://localhost:4174",
+    "http://localhost:3000",
+    "http://127.0.0.1:8000",
+    "http://192.168.1.245:8000"
+]
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# main our-API page
+@app.get("/")
+async def root():
+    return {"message": "welcome to detr detection app api!"}
+
+
+# our-API check health page
+@app.get("/health")
+async def check_health():
+    return {"message": "healthy"}
+
+
+# post image
+@app.post("/post-image")
+async def post_image(file: UploadFile = File(...)) -> list:
+
+    # save file from frontend
+    with open(file.filename, "wb") as buffer:
+        buffer.write(file.file.read())
+
+    # read saved file as image
+    image = cv2.imread(file.filename)
+
+    # change cv2's BGR image to RGB image
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    # transform to 640x640
+    image = cv2.resize(image, (640, 640))
+
+    # define a transform
+    transform = transforms.Compose([transforms.ToTensor()])
+
+    # convert the image to torch tensor
+    input_tensor = transform(image)
+
+    # call model
+    output_dict = model_call(input_tensor)
+
+    # init output list [detections, scores, labels]
+    output_list = []
+
+    # proccess output (get detections (boxes): 0:boxes, 1:scores, 2:labels)
+    boxes_tensor = output_dict['detections'][0]['boxes']
+    # convert torch tensor to simple list
+    boxes = [ [num.item() for num in row] for row in boxes_tensor]
+
+    # proccess output (get detections (scores): 0:boxes, 1:scores, 2:labels)
+    scores_tensor = output_dict['detections'][0]['scores']
+    # convert torch tensor to simple list
+    scores = [num.item() for num in scores_tensor]
+
+    # proccess output (get detections (labels): 0:boxes, 1:scores, 2:labels)
+    labels_tensor = output_dict['detections'][0]['labels']
+    # convert torch tensor to simple list
+    labels = [num.item() for num in labels_tensor]
+
+    # append stuff
+    output_list.append(boxes)
+    output_list.append(scores)
+    output_list.append(labels)
+
+    # LOGGING
+    print(output_list)
+
+    # get prediction back
+    return output_list
+
+def model_call(input_tensor):
+    
+    # init model bellow
+
+    # select device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # set model configuration
+    config = CONFIG
+
+    # additional setup
+    num_classes = 23
+    bg_class_idx = num_classes - 1
+
+    # init model
+    model = DETR(config, num_classes=num_classes, bg_class_idx=bg_class_idx).to(device)
+    
+    # specify weights path
+    pth_path = r"C:\Users\posttoska\Documents\transformer-mobile-app\backend\model\weights\detr_voc23cls_plus_mydata_ep800.pth"
+
+    # define state
+    state = torch.load(pth_path, map_location=device)
+
+    # load state
+    model.load_state_dict(state, strict=True)
+
+    # select inference mode
+    model.eval()
+
+    # call model
+    with torch.inference_mode():
+        output_dict = model(input_tensor)
+
+    return output_dict
+
+
+
+
+
+---------- "C:\Users\posttoska\Documents\transformer-mobile-app\backend\model\config.py" ----------:
+
+CONFIG = {
+    'image_h': 640,
+    'image_w': 640,
+    'backbone_channels': 512,
+    'd_model': 256,
+    'num_queries': 25,
+    'encoder_layers': 4,
+    'decoder_layers': 4,
+    'encoder_attn_heads': 8,
+    'decoder_attn_heads': 8,
+    'ff_inner_dim': 2048,
+    'dropout_prob': 0.1,
+    'cls_cost_weight': 1.0,
+    'l1_cost_weight': 5.0,
+    'giou_cost_weight': 2.0,
+    'bg_class_weight': 0.1,
+    'nms_threshold': 0.5,
+    'freeze_backbone': False,
+}
+
+
+
+
+
+---------- "C:\Users\posttoska\Documents\transformer-mobile-app\backend\model\detr.py" ----------:
+
+import torch
+import math
+import torch.nn as nn
+import torchvision.models
+from torch.nn import functional as F
+from torchvision.models import resnet34
+from scipy.optimize import linear_sum_assignment
+from collections import defaultdict
+
+
+def get_spatial_position_embeddings(embed_size: int, conv_out_tensor: torch.Tensor):
+    assert embed_size % 4 == 0, ('Position embedding dimension must be divisible by 4')
+
+    grid_size_h, grid_size_w = conv_out_tensor.shape[-2], conv_out_tensor.shape[-1]
+    grid_h = torch.arange(grid_size_h, dtype=torch.float32, device=conv_out_tensor.device)
+    grid_w = torch.arange(grid_size_w, dtype=torch.float32, device=conv_out_tensor.device)
+    grid = torch.meshgrid(grid_h, grid_w, indexing='ij')
+    grid = torch.stack(grid, dim=0)
+    grid_h_positions = grid[0].reshape(-1)
+    grid_w_positions = grid[1].reshape(-1)
+
+    factor = torch.arange(
+        start=0,
+        end=embed_size // 4,
+        dtype=torch.float32,
+        device=conv_out_tensor.device
+    )
+
+    factor /= (embed_size // 4)
+    factor = 10000 ** factor
+    vert_h_pos = grid_h_positions[:, None]
+    vert_h_pos_extruded = vert_h_pos.repeat(1, embed_size // 4)
+    grid_h_emb = vert_h_pos_extruded / factor
+    grid_h_emb = torch.cat([torch.sin(grid_h_emb), torch.cos(grid_h_emb)], dim=-1)
+    horz_w_pos = grid_w_positions[:, None]
+    horz_w_pos_extruded = horz_w_pos.repeat(1, embed_size // 4)
+    grid_w_emb = horz_w_pos_extruded / factor
+    grid_w_emb = torch.cat([torch.sin(grid_w_emb), torch.cos(grid_w_emb)], dim=-1)
+    pos_embeded = torch.cat([grid_h_emb, grid_w_emb], dim=-1)
+
+    return pos_embeded
+
+
+class MultiHeadAttention(nn.Module):
+    
+    def __init__(self, d_model, num_heads):
+        super().__init__()
+
+        self.num_heads = num_heads
+        self.in_proj_q = nn.Linear(d_model, d_model)
+        self.in_proj_k = nn.Linear(d_model, d_model)
+        self.in_proj_v = nn.Linear(d_model, d_model)
+        self.out_proj = nn.Linear(d_model, d_model)
+        self.d_head = d_model // num_heads
+
+    def forward(self, q, k, v):
+
+        Qb, Ql, Qe = q.shape
+        Kb, Kl, Ke = k.shape
+        Vb, Vl, Ve = v.shape
+        broadcast_shape_Q = (Qb, Ql, self.num_heads, self.d_head)
+        broadcast_shape_K = (Kb, Kl, self.num_heads, self.d_head)
+        broadcast_shape_V = (Vb, Vl, self.num_heads, self.d_head)
+        q = self.in_proj_q(q)
+        k = self.in_proj_k(k)
+        v = self.in_proj_v(v)
+
+        q = q.view(broadcast_shape_Q)
+        k = k.view(broadcast_shape_K)
+        v = v.view(broadcast_shape_V)
+
+        q = q.transpose(1, 2)
+        k = k.transpose(1, 2)
+        v = v.transpose(1, 2)
+
+        qk = q @ k.transpose(2, 3)
+        qk /= math.sqrt(self.d_head)
+        
+        # we don't need mask for image classification at all
+        # mask = torch.ones_like(qk, dtype=torch.bool).triu(1)
+        # qk.masked_fill_(mask, -torch.inf)
+
+        qk = F.softmax(qk, dim=-1)
+        out = qk @ v
+        att_map = qk.mean(dim=1)
+        out = out.transpose(1, 2)
+        out = out.reshape(Qb, Ql, Qe)
+        out = self.out_proj(out)
+
+        return out, att_map
+
+
+class TransformerEncoder(nn.Module):
+    r"""
+    Encoder for transformer of DETR.
+    This has sequence of encoder layers.
+    Each layer has the following modules.
+        1. LayerNorm for Self Attention.
+        2. Self Attention.
+        3. LayerNorm for MLP.
+        4. MLP.
+    """
+    def __init__(self, num_layers, num_heads, d_model, ff_inner_dim, dropout_prob=0.0):
+        super().__init__()
+        self.num_layers = num_layers
+        self.dropout_prob = dropout_prob
+        self.attns = nn.ModuleList([MultiHeadAttention(d_model, num_heads) for _ in range(num_layers)])
+
+        self.ffs = nn.ModuleList(
+            [
+                nn.Sequential(
+                    nn.Linear(d_model, ff_inner_dim),
+                    nn.ReLU(),
+                    nn.Linear(ff_inner_dim, d_model),
+                ) 
+                for _ in range(num_layers)
+            ])
+
+        self.attn_norms = nn.ModuleList([nn.LayerNorm(d_model) for _ in range(num_layers)])
+        self.ff_norms = nn.ModuleList([nn.LayerNorm(d_model) for _ in range(num_layers)])
+        self.attn_dropouts = nn.ModuleList([nn.Dropout(self.dropout_prob) for _ in range(num_layers)])
+        self.ff_dropouts = nn.ModuleList([nn.Dropout(self.dropout_prob) for _ in range(num_layers)])
+        self.output_norm = nn.LayerNorm(d_model)
+
+    def forward(self, x, spatial_pos_embed):
+        """
+            -----> X TENSOR: (B, seq_len=400, d_model=256)
+        """
+        out = x
+        attn_weights = []
+
+        for i in range(self.num_layers):
+            in_attn = self.attn_norms[i](out)
+
+            q = in_attn + spatial_pos_embed
+            k = in_attn + spatial_pos_embed
+            v = in_attn
+
+            out_attn, attn_weight = self.attns[i](q=q, k=k, v=v)
+            attn_weights.append(attn_weight)
+
+            out_attn = self.attn_dropouts[i](out_attn)
+            out = out + out_attn
+            in_ff = self.ff_norms[i](out)
+            out_ff = self.ffs[i](in_ff)
+            out_ff = self.ff_dropouts[i](out_ff)
+            out = out + out_ff
+
+        out = self.output_norm(out)
+        return out, torch.stack(attn_weights)
+
+
+class TransformerDecoder(nn.Module):
+    r"""
+    Decoder for transformer of DETR.
+    This has sequence of decoder layers.
+    Each layer has the following modules.
+        1. LayerNorm for Self Attention.
+        2. Self Attention.
+        3. LayerNorm for Cross Attention on encoder outputs.
+        4. Cross Attention.
+        5. LayerNorm for MLP.
+        6. MLP.
+    """
+    def __init__(self, num_layers, num_heads, d_model, ff_inner_dim, dropout_prob=0.0):
+        super().__init__()
+        self.num_layers = num_layers
+        self.dropout_prob = dropout_prob
+
+        self.attns = nn.ModuleList([MultiHeadAttention(d_model, num_heads) for _ in range(num_layers)])
+        self.cross_attns = nn.ModuleList([MultiHeadAttention(d_model, num_heads) for _ in range(num_layers)])
+
+        self.ffs = nn.ModuleList(
+            [
+                nn.Sequential(
+                    nn.Linear(d_model, ff_inner_dim),
+                    nn.ReLU(),
+                    nn.Linear(ff_inner_dim, d_model),
+                ) 
+                for _ in range(num_layers)
+            ])
+
+        self.attn_norms = nn.ModuleList([nn.LayerNorm(d_model) for _ in range(num_layers)])
+        self.cross_attn_norms = nn.ModuleList([nn.LayerNorm(d_model) for _ in range(num_layers)])
+        self.ff_norms = nn.ModuleList([nn.LayerNorm(d_model) for _ in range(num_layers)])
+        self.attn_dropouts = nn.ModuleList(nn.Dropout(self.dropout_prob) for _ in range(num_layers))
+        self.cross_attn_dropouts = nn.ModuleList(nn.Dropout(self.dropout_prob) for _ in range(num_layers))
+        self.ff_dropouts = nn.ModuleList([nn.Dropout(self.dropout_prob) for _ in range(num_layers)])
+        self.output_norm = nn.LayerNorm(d_model)
+
+    def forward(self, query_objects, encoder_output, query_embed, spatial_pos_embed):
+        out = query_objects
+        decoder_outputs = []
+        decoder_cross_attn_weights = []
+
+        for i in range(self.num_layers):
+            in_attn = self.attn_norms[i](out)
+            q = in_attn + query_embed
+            k = in_attn + query_embed
+            v = in_attn
+
+            out_attn, _ = self.attns[i](q=q, k=k, v=v)
+            out_attn = self.attn_dropouts[i](out_attn)
+            out = out + out_attn
+            in_attn = self.cross_attn_norms[i](out)
+
+            q = in_attn + query_embed
+            k = encoder_output + spatial_pos_embed
+            v = encoder_output
+
+            out_attn, decoder_cross_attn = self.cross_attns[i](q=q, k=k, v=v)
+
+            decoder_cross_attn_weights.append(decoder_cross_attn)
+            out_attn = self.cross_attn_dropouts[i](out_attn)
+            out = out + out_attn
+
+            in_ff = self.ff_norms[i](out)
+            out_ff = self.ffs[i](in_ff)
+            out_ff = self.ff_dropouts[i](out_ff)
+            out = out + out_ff
+            decoder_outputs.append(self.output_norm(out))
+
+        decoder_outputs = torch.stack(decoder_outputs)
+        decoder_cross_attn_weights = torch.stack(decoder_cross_attn_weights)
+        return decoder_outputs, decoder_cross_attn_weights
+
+
+class DETR(nn.Module):
+    r"""
+    DETR MODEL DIMENSIONS:
+    INPUT TENSOR: (B, c=3, h=640, w=640)
+    """
+    def __init__(self, config, num_classes, bg_class_idx):
+        super().__init__()
+        self.img_h = config['image_h']
+        self.img_w = config['image_w']
+        self.backbone_channels = config['backbone_channels']
+        self.d_model = config['d_model']
+        self.num_queries = config['num_queries']
+        self.num_classes = num_classes
+        self.num_encoder_layers = config['encoder_layers']
+        self.num_decoder_layers = config['decoder_layers']
+        self.num_encoder_heads = config['encoder_attn_heads']
+        self.num_decoder_heads = config['decoder_attn_heads']
+        self.cls_cost_weight = config['cls_cost_weight']
+        self.l1_cost_weight = config['l1_cost_weight']
+        self.giou_cost_weight = config['giou_cost_weight']
+        self.bg_cls_weight = config['bg_class_weight']
+        self.nms_threshold = config['nms_threshold']
+        self.dropout_prob = config['dropout_prob']
+        self.bg_class_idx = bg_class_idx
+        self.ff_inner_dim = config['ff_inner_dim']
+        valid_bg_idx = (self.bg_class_idx == 0 or self.bg_class_idx == (self.num_classes - 1))
+        assert valid_bg_idx, "Background can only be 0 or num_classes - 1"
+
+        self.seq_len = ((self.img_h + 31) // 32) * ((self.img_w + 31) // 32)
+
+        self.backbone = nn.Sequential(*list(resnet34(
+            weights=torchvision.models.ResNet34_Weights.IMAGENET1K_V1,
+            norm_layer=torchvision.ops.FrozenBatchNorm2d
+        ).children())[:-2])
+
+        if config['freeze_backbone']:
+            for param in self.backbone.parameters():
+                param.requires_grad = False
+
+        self.backbone_proj = nn.Conv2d(self.backbone_channels, self.d_model, kernel_size=1)
+
+        self.encoder = TransformerEncoder(num_layers=self.num_encoder_layers, 
+                                          num_heads=self.num_encoder_heads, 
+                                          d_model=self.d_model, 
+                                          ff_inner_dim=self.ff_inner_dim, 
+                                          dropout_prob=self.dropout_prob)
+
+        self.query_embed = nn.Parameter(torch.randn(self.num_queries, self.d_model))
+
+        self.decoder = TransformerDecoder(num_layers=self.num_decoder_layers, 
+                                          num_heads=self.num_decoder_heads, 
+                                          d_model=self.d_model,
+                                          ff_inner_dim=self.ff_inner_dim, 
+                                          dropout_prob=self.dropout_prob)
+        
+        self.class_mlp = nn.Linear(self.d_model, self.num_classes)
+
+        self.bbox_mlp = nn.Sequential(
+            nn.Linear(self.d_model, self.d_model),
+            nn.ReLU(),
+            nn.Linear(self.d_model, self.d_model),
+            nn.ReLU(),
+            nn.Linear(self.d_model, out_features=4),
+        )
+    
+    def forward(self, x, targets=None, score_thresh=0, use_nms=False):
+        # x -> (b, ch, h, w)
+        resnet_out = self.backbone(x)
+        conv_out = self.backbone_proj(resnet_out)
+        batch_size, d_model, feat_h, feat_w = conv_out.shape
+        spatial_pos_embed = get_spatial_position_embeddings(d_model, conv_out)
+        conv_out = conv_out.reshape(batch_size, d_model, feat_h * feat_w)
+        conv_out = conv_out.transpose(1, 2)
+
+        enc_output, enc_att_weights = self.encoder(conv_out, spatial_pos_embed)
+
+        query_reshaped = self.query_embed.unsqueeze(0).repeat((batch_size, 1, 1))
+        query_objects_zeros = torch.zeros_like(query_reshaped)
+        query_objects, decoder_attn_weights = self.decoder(query_objects_zeros, enc_output, query_reshaped, spatial_pos_embed)
+
+        cls_output = self.class_mlp(query_objects)
+        bbox_output = self.bbox_mlp(query_objects).sigmoid()
+
+        losses = defaultdict(list)
+        detections = []
+        detr_output = {}
+
+        if self.training:
+            num_decoder_layers = self.num_decoder_layers
+
+            for decoder_idx in range(num_decoder_layers):
+                cls_idx_output = cls_output[decoder_idx]
+                bbox_idx_output = bbox_output[decoder_idx]
+
+                with torch.no_grad():
+                    class_prob_tns = cls_idx_output.reshape((-1, self.num_classes))
+                    class_prob_tns = class_prob_tns.softmax(dim=-1)
+                    pred_boxes_tns = bbox_idx_output.reshape((-1, 4))
+                    target_labels = torch.cat([target["labels"] for target in targets])
+                    target_boxes = torch.cat([target["boxes"] for target in targets])
+
+                    COST_CLS_REDUCED_TNS = -class_prob_tns[:, target_labels]
+                    pred_boxes_x1y1x2y2 = torchvision.ops.box_convert(pred_boxes_tns, 'cxcywh', 'xyxy')
+
+                    COST_L1_REDUCED_TNS = torch.cdist(pred_boxes_x1y1x2y2, target_boxes, p=1)
+                    COST_GIOU_REDUCED_TNS = -torchvision.ops.generalized_box_iou(pred_boxes_x1y1x2y2, target_boxes)
+                    COST_TNS = (self.cls_cost_weight * COST_CLS_REDUCED_TNS + self.l1_cost_weight * COST_L1_REDUCED_TNS + self.giou_cost_weight * COST_GIOU_REDUCED_TNS)
+                    COST_TNS = COST_TNS.reshape(batch_size, self.num_queries, -1).cpu()
+
+                    num_targets_per_image = [len(target["labels"]) for target in targets]
+                    ITO_COST_TUPLE =  COST_TNS.split(num_targets_per_image, dim=-1)
+
+                    match_indices = []
+                    for batch_idx in range(batch_size):
+                        DCT = ITO_COST_TUPLE[batch_idx][batch_idx]
+                        batch_idx_assignments = linear_sum_assignment(DCT)
+                        batch_idx_pred, batch_idx_target = batch_idx_assignments
+                        match_indices.append((torch.as_tensor(batch_idx_pred, dtype=torch.int64), torch.as_tensor(batch_idx_target, dtype=torch.int64)))
+
+                pred_batch_idxs = torch.cat([torch.ones_like(pred_idx) * i for i, (pred_idx, _) in enumerate(match_indices)])
+                pred_query_idx = torch.cat([pred_idx for (pred_idx, _) in match_indices])
+
+                valid_obj_target_cls = torch.cat([target["labels"][target_obj_idx] for target, (_, target_obj_idx) in zip(targets, match_indices)])
+                target_classes = torch.full(cls_idx_output.shape[:2], fill_value=self.bg_class_idx, dtype=torch.int64,device=cls_idx_output.device)
+                target_classes[(pred_batch_idxs, pred_query_idx)] = valid_obj_target_cls
+
+
+                cls_weights = torch.ones(self.num_classes)
+                cls_weights[self.bg_class_idx] = self.bg_cls_weight
+                loss_cls = torch.nn.functional.cross_entropy(cls_idx_output.reshape(-1, self.num_classes), target_classes.reshape(-1), cls_weights.to(cls_idx_output.device))
+
+                matched_pred_boxes = bbox_idx_output[pred_batch_idxs, pred_query_idx]
+                target_boxes = torch.cat([
+                    target['boxes'][target_obj_idx]
+                    for target, (_, target_obj_idx) in zip(targets, match_indices)],
+                    dim=0
+                )
+                matched_pred_boxes_x1y1x2y2 = torchvision.ops.box_convert(matched_pred_boxes,'cxcywh','xyxy')
+                loss_bbox = torch.nn.functional.l1_loss(matched_pred_boxes_x1y1x2y2, target_boxes, reduction='none')
+                loss_bbox = loss_bbox.sum() / matched_pred_boxes.shape[0]
+
+                loss_giou = torchvision.ops.generalized_box_iou_loss(matched_pred_boxes_x1y1x2y2, target_boxes)
+                loss_giou = loss_giou.sum() / matched_pred_boxes.shape[0]
+
+                # losses
+                losses['classification'].append(loss_cls * self.cls_cost_weight)
+                losses['bbox_regression'].append(loss_bbox * self.l1_cost_weight + loss_giou * self.giou_cost_weight)
+
+            detr_output['loss'] = losses
+
+        else:
+            # for inference we are only interested in last layer outputs
+            cls_output = cls_output[-1]
+            bbox_output = bbox_output[-1]
+            prob = torch.nn.functional.softmax(cls_output, -1)
+
+            if self.bg_class_idx == 0:
+                scores, labels = prob[..., 1:].max(-1)
+                labels = labels + 1
+            else:
+                scores, labels = prob[..., :-1].max(-1)
+
+            boxes = torchvision.ops.box_convert(bbox_output,'cxcywh','xyxy')
+
+            for batch_idx in range(boxes.shape[0]):
+                scores_idx = scores[batch_idx]
+                labels_idx = labels[batch_idx]
+                boxes_idx = boxes[batch_idx]
+
+                keep_idxs = scores_idx >= score_thresh
+
+                scores_idx = scores_idx[keep_idxs]
+                boxes_idx = boxes_idx[keep_idxs]
+                labels_idx = labels_idx[keep_idxs]
+
+                if use_nms:
+                    keep_idxs = torchvision.ops.batched_nms(boxes_idx, scores_idx, labels_idx, iou_threshold=self.nms_threshold)
+                    scores_idx = scores_idx[keep_idxs]
+                    boxes_idx = boxes_idx[keep_idxs]
+                    labels_idx = labels_idx[keep_idxs]
+
+                detections.append(
+                    {
+                        "boxes": boxes_idx,
+                        "scores": scores_idx,
+                        "labels": labels_idx
+                        ,
+                    }
+                )
+
+            detr_output['detections'] = detections
+            detr_output['enc_attn'] = enc_att_weights
+            detr_output['dec_attn'] = decoder_attn_weights
+
+        return detr_output
+
+
+# frontend part:
+
+
+---------- "C:\Users\posttoska\Documents\transformer-mobile-app\frontend\app\src\main\java\com\example\imagepicker\MainActivity.java" ----------:
+
+package com.example.imagepicker;
+
+import android.Manifest;
+import android.annotation.SuppressLint;
+import android.content.ContentValues;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
+import android.media.ExifInterface;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.ParcelFileDescriptor;
+import android.provider.MediaStore;
+import android.util.Log;
+import android.view.View;
+import android.widget.ImageView;
+
+import androidx.appcompat.app.AppCompatActivity;
+
+import org.apache.commons.io.IOUtils;
+import org.json.JSONObject;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileDescriptor;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Collections;
+import java.util.List;
+
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.RequestBody;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+import retrofit2.Retrofit;
+
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.RectF;
+import android.os.Bundle;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import androidx.appcompat.app.AppCompatActivity;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+public class MainActivity extends AppCompatActivity {
+
+    ImageView imageView;
+
+    FrameLayout imageLayer;
+
+    private MyBBoxView bboxView;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        // create image view obj
+        imageView = findViewById(R.id.imageView);
+
+        // create overlay obj
+        imageLayer = findViewById(R.id.imageLayer);
+
+        // TODO ask for permission of camera upon first launch of application
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (checkSelfPermission(Manifest.permission.CAMERA)  == PackageManager.PERMISSION_DENIED || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    == PackageManager.PERMISSION_DENIED){
+                String[] permission = {Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE};
+                requestPermissions(permission, 112);
+            }
+        }
+
+        // TODO chose image from gallery
+        imageView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent galleryIntent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+                startActivityForResult(galleryIntent, RESULT_LOAD_IMAGE);
+            }
+        });
+
+        //TODO capture image using camera
+        imageView.setOnLongClickListener(new View.OnLongClickListener() {
+            @Override
+            public boolean onLongClick(View v) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){
+                    if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                            == PackageManager.PERMISSION_DENIED){
+                        String[] permission = {Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE};
+                        requestPermissions(permission, 112);
+                    }
+                    else {
+                        openCamera();
+                    }
+                }
+
+                else {
+                    openCamera();
+                }
+                return false;
+            }
+        });
+    };
+
+    Uri image_uri;
+    List detections;
+    // capture image from gallery
+    private static final int RESULT_LOAD_IMAGE = 123;
+    // capture image by camera
+    public static final int IMAGE_CAPTURE_CODE = 654;
+
+    // TODO opens camera so that user can capture image
+    private void openCamera() {
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.Images.Media.TITLE, "New Picture");
+        values.put(MediaStore.Images.Media.DESCRIPTION, "From the Camera");
+        image_uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+        Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, image_uri);
+        startActivityForResult(cameraIntent, IMAGE_CAPTURE_CODE);
+    }
+
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        // check response
+        if (resultCode == RESULT_OK) {
+
+            // horizontal rotation problem
+            if (image_uri == null) return;
+
+            // get image uri if it was captured from gallery
+            if (requestCode == RESULT_LOAD_IMAGE){
+                image_uri = data.getData();
+            }
+
+            // convert image into bitmap
+            Bitmap inputBmp = uriToBitmap(image_uri);
+
+            // make appropriate rotation
+            inputBmp = rotateImage(inputBmp, image_uri);
+
+            // display given image
+            imageView.setImageBitmap(inputBmp);
+
+            // solution source: https://stackoverflow.com/questions/3425906/creating-temporary-files-in-android
+            // context being the Activity pointer
+            File outputDir = getCacheDir();
+            // create temp file
+            File tempFile = null;
+            tempFile = new File(outputDir, "upload_img.png");
+
+            // make input stream
+            try {
+                InputStream inStream = getContentResolver().openInputStream(image_uri);
+                FileOutputStream outStream = new FileOutputStream(tempFile);
+
+                IOUtils.copy(inStream, outStream);
+
+                inStream.close();
+                outStream.close();
+
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            };
+
+            // send to backend a file
+            sendToBackend(tempFile);
+        }
+    }
+
+    private void sendToBackend(File file) {
+
+        // create request body
+        RequestBody requestBody = RequestBody.create(MediaType.parse("image/*"), file);
+        // create multipart for requestBody part
+        MultipartBody.Part part = MultipartBody.Part.createFormData("file", file.getName(), requestBody);
+        // getting retrofit connection and api
+        Retrofit retrofit = NetworkClient.getRetrofit();
+        UploadAPI uploadAPI = retrofit.create(UploadAPI.class);
+
+
+        // create a call
+        Call call = uploadAPI.postImage(part);
+
+        // call a call
+        call.enqueue(new Callback() {
+            @Override
+            public void onResponse(Call call, Response response) {
+
+
+                if (response.isSuccessful()) {
+                    // handle the response
+                    // Log.d("BackResponse", response.body().toString());
+
+                    // insert detections
+                    detections = (List) response.body();
+                    // logging
+                    Log.d("BackResponseDetections", detections.toString());
+
+                    // create mask
+                    createMaskOverlay(detections);
+
+                } else {
+                    // handle error
+                    Log.e("BackResponse", "Something went wrong");
+                }
+            }
+
+            @Override
+            public void onFailure(Call call, Throwable t) {
+                throw new RuntimeException(t);
+            }
+        });
+    };
+
+    private void createMaskOverlay(List detections_list) {
+
+        // 1) delete previous overlay
+        if (bboxView != null) {
+            imageLayer.removeView(bboxView);
+            bboxView = null;
+        } else {
+
+        }
+
+        List<List<Double>> boxes1 = (List<List<Double>>) detections_list.get(0);
+        List<Number> scores1 = (List<Number>) detections_list.get(1);
+        List<Number> labels1 = (List<Number>) detections_list.get(2);
+
+        List<String> labels_names = new ArrayList<>();
+        List<List<Double>> boxes_reduced = new ArrayList<>();
+        List<Float> scores_reduced = new ArrayList<>();
+        List<String> labels_reduced = new ArrayList<>();
+        List<List> detections_reduced = new ArrayList<>();
+
+        if (detections_list != null && !detections_list.isEmpty()) {
+
+            String[] names = {"background", "person", "bird", "cat",
+                     "cow", "dog","horse", "sheep", "aeroplane",
+                    "bicycle",  "boat", "bus", "car", "motorbike",
+                    "train", "bottle", "chair", "diningtable",
+                    "pottedplant", "sofa", "tvmonitor", "apple", "cup"};
+
+            float trsh = 0.7f;
+
+            for (int i = 0; i < labels1.size(); i++) {
+                // get current index from name
+                int digital_name = labels1.get(i).intValue();
+                float score = scores1.get(i).floatValue();
+
+                String real_name = names[digital_name];
+
+                // delete all backgound items from 3 arrays
+                // delete small scored items from 3 arrays
+                if (!real_name.equals("background") && score > trsh) {
+                    boxes_reduced.add(boxes1.get(i));
+                    scores_reduced.add(scores1.get(i).floatValue());
+                    labels_reduced.add(real_name);
+                }
+            }
+
+        } else {
+            System.out.println("The list is empty or null");
+        }
+
+//        Log.d("BackResponseDetections", boxes_reduced.toString());
+//        Log.d("BackResponseDetections", scores_reduced.toString());
+//        Log.d("BackResponseDetections", labels_reduced.toString());
+
+        // append reduced detections
+        detections_reduced.add(boxes_reduced);
+        detections_reduced.add(scores_reduced);
+        detections_reduced.add(labels_reduced);
+
+        // create overlay instance
+        bboxView = new MyBBoxView(this, detections_reduced);
+
+        // make overlay
+        imageLayer.addView(bboxView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+    }
+
+    // TODO take URI of the image and returns bitmap
+    private Bitmap uriToBitmap(Uri selectedFileUri) {
+        try {
+            ParcelFileDescriptor parcelFileDescriptor =
+                    getContentResolver().openFileDescriptor(selectedFileUri, "r");
+            FileDescriptor fileDescriptor =
+                    parcelFileDescriptor.getFileDescriptor();
+            Bitmap image =
+                    BitmapFactory.decodeFileDescriptor(fileDescriptor);
+            parcelFileDescriptor.close();
+            return image;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    // auto rotation reduction
+    @SuppressLint("NewApi")
+    private Bitmap rotateImage(Bitmap bitmap, Uri uri) {
+        // init exif interface
+        ExifInterface exifInterface;
+        // try to get image exif
+        try (InputStream in = getContentResolver().openInputStream(uri)) {
+            // get exif interface exif
+            exifInterface = new ExifInterface(in);
+        // catch file not found
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        // catch input output exception
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        // get image orientation value as int
+        int orientation = exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED);
+
+        // create matrix to rotate image
+        Matrix matrix = new Matrix();
+
+        // different rotation cases
+        switch (orientation) {
+            // if image is 90 degree rotated -> unrotate it for 90 degrees (only matrix for now)
+            case ExifInterface.ORIENTATION_ROTATE_90:
+                matrix.setRotate(90);
+                break;
+            // if image is 180 degree rotated -> unrotate it for 180 degrees (only matrix for now)
+            case ExifInterface.ORIENTATION_ROTATE_180:
+                matrix.setRotate(180);
+                break;
+            default:
+                matrix.setRotate(0);
+        }
+        // now create new rotated bitmap image with rotation matrix
+        Bitmap rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+        return rotatedBitmap;
+    }
+}
+
+
+
+
+
+---------- "C:\Users\posttoska\Documents\transformer-mobile-app\frontend\app\src\main\java\com\example\imagepicker\MyBBoxView.java" ----------:
+
+package com.example.imagepicker;
+import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.Rect;
+import android.util.AttributeSet;
+import android.util.Log;
+import android.view.View;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class MyBBoxView extends View {
+    Paint boxPaint;
+    Paint textPaint;
+
+    List detections_list;
+
+    // create context
+    public MyBBoxView(Context context, List detections)
+    {
+        super(context);
+        // create shape objects
+        boxPaint = new Paint();
+        textPaint = new Paint();
+
+        // give detections
+        detections_list = detections;
+    }
+
+    // drawing class
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+
+        List<List<Double>> boxes_reduced = (List<List<Double>>) detections_list.get(0);
+        List<Float> scores_reduced = (List<Float>) detections_list.get(1);
+        List<String> labels_reduced = (List<String>) detections_list.get(2);
+
+        // draw a red rectangle
+        boxPaint.setColor(Color.RED);
+        // make frame type rectangle (transparent)
+        boxPaint.setStyle(Paint.Style.STROKE);
+        // width of frame
+        boxPaint.setStrokeWidth(6);
+
+        // draw text
+        textPaint.setColor(Color.WHITE);
+        // adjust text size
+        textPaint.setTextSize(10);
+
+        // get image size
+        int x_width = getWidth();
+        int y_height = getHeight();
+
+        // init temp variables
+        List<Double> current_bbox;
+        float current_score;
+        String current_label;
+
+        // init bbox coord variables
+        float x0_coord_left;
+        float y0_coord_top;
+        float x1_coord_right;
+        float y1_coord_bottom;
+
+        int offset_val = 10;
+
+        // make bbox algorithm
+        for (int i = 0; i < scores_reduced.size(); i++) {
+
+            // get current detections (bboxes, score, label)
+            current_bbox = boxes_reduced.get(i);
+            current_score = scores_reduced.get(i);
+            current_label = labels_reduced.get(i);
+
+            // bboxes coordinates
+            x0_coord_left = current_bbox.get(0).floatValue();
+            y0_coord_top = current_bbox.get(1).floatValue();
+            x1_coord_right = current_bbox.get(2).floatValue();
+            y1_coord_bottom = current_bbox.get(3).floatValue();
+
+            // insert data
+            canvas.drawRect(x_width*x0_coord_left, y_height*y0_coord_top,
+                           x_width*x1_coord_right, y_height*y1_coord_bottom, boxPaint);
+
+            // score text
+            canvas.drawText(String.valueOf(current_score), x_width*x0_coord_left - offset_val, (y_height*y0_coord_top) - offset_val, textPaint);
+            // label text
+            canvas.drawText(String.valueOf(current_label), x_width*x1_coord_right - offset_val, y_height*y0_coord_top - offset_val, textPaint);
+        }
+
+
+        Log.d("BackResponseDetections", detections_list.toString());
+
+        Log.d("BackResponseDetections", boxes_reduced.toString());
+        Log.d("BackResponseDetections", scores_reduced.toString());
+        Log.d("BackResponseDetections", labels_reduced.toString());
+
+    }
+}
+
+
+
+
+
+---------- "C:\Users\posttoska\Documents\transformer-mobile-app\frontend\app\src\main\java\com\example\imagepicker\NetworkClient.java" ----------:
+
+package com.example.imagepicker;
+
+import okhttp3.OkHttpClient;
+import retrofit2.Retrofit;
+import retrofit2.converter.gson.GsonConverterFactory;
+
+public class NetworkClient {
+    private static Retrofit retrofit;
+    private static String BASE_URL = "http://192.168.1.177:8000/";
+
+    public static Retrofit getRetrofit() {
+        OkHttpClient okHttpClient = new OkHttpClient.Builder().build();
+
+        if (retrofit == null) {
+            retrofit = new Retrofit.Builder()
+                    .baseUrl(BASE_URL)
+                    .addConverterFactory(GsonConverterFactory.create())
+                    .client(okHttpClient).build();
+        }
+        return retrofit;
+    }
+}
+
+
+
+
+
+---------- "C:\Users\posttoska\Documents\transformer-mobile-app\frontend\app\src\main\java\com\example\imagepicker\UploadAPI.java" ----------:
+
+package com.example.imagepicker;
+
+import java.util.List;
+
+import okhttp3.MultipartBody;
+import retrofit2.Call;
+import retrofit2.http.Multipart;
+import retrofit2.http.POST;
+import retrofit2.http.Part;
+
+public interface UploadAPI {
+    @Multipart
+    @POST("post-image")
+    Call<List> postImage(@Part MultipartBody.Part part);
+}
+
+
+
+
+
+---------- "C:\Users\posttoska\Documents\transformer-mobile-app\frontend\app\src\main\AndroidManifest.xml" ----------:
+
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.ImagePicker"
+        android:usesCleartextTraffic="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+
+</manifest>
+
+
+
+
+
+---------- "C:\Users\posttoska\Documents\transformer-mobile-app\frontend\app\src\main\res\layout\activity_main.xml" ----------:
+
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+
+    <FrameLayout
+        android:id="@+id/imageLayer"
+        android:layout_width="350dp"
+        android:layout_height="350dp"
+        android:layout_marginStart="15dp"
+        android:layout_marginTop="50dp"
+        android:layout_marginEnd="15dp"
+        android:padding="15dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/textView2">
+
+        <ImageView
+            android:id="@+id/imageView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginStart="0dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginEnd="0dp"
+            android:padding="0dp"
+            android:scaleType="fitCenter"
+            android:rotation="0"
+            app:layout_constraintBottom_toTopOf="@+id/textView2"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.5"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:srcCompat="@drawable/img" />
+
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/textView2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Object Detection"
+        android:textColor="@color/black"
+        android:textSize="36sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/imageView" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

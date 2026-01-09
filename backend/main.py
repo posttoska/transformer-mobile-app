@@ -14,10 +14,59 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from model.detr import DETR
 from model.config import CONFIG
+from typing import List, Union
+from fastapi import Depends
 
+from pydantic import BaseModel
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, LargeBinary
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
 
 # init app
 app = FastAPI()
+
+# database setup
+DATABASE_URL = "mssql+pyodbc://@DESKTOP-J0N5V67\\SQLEXPRESS/transformerDB?driver=ODBC+Driver+17+for+SQL+Server&Trusted_Connection=yes"
+
+# create database engine
+engine = create_engine(DATABASE_URL)
+
+# create local session
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# sql alchemy database
+Base = declarative_base()
+
+# image + detections class model
+class DetectionDB(Base):
+    __tablename__ = 'detections'
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    filename = Column(String(100), nullable=False)
+    image_bytes = Column(LargeBinary, nullable=False)
+    detections_json = Column(Text, nullable=False)
+
+# create tables
+Base.metadata.create_all(bind=engine)
+
+# specify data types
+class DetectionCreate(BaseModel):
+    filename: str
+    image_bytes: bytes
+    detections_json: str
+
+class Detection(DetectionCreate):
+    id: int
+
+    class Config:
+        orm_mode = True
+
+# dependency to get DB session
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 # CORS (Cross-Origin Resource Sharing) - resourses we're accepting
 origins = [
@@ -142,3 +191,77 @@ def model_call(input_tensor):
 
     return output_dict
 
+
+# get last 30 database detection
+@app.get("/detections", response_model=List[Detection])
+async def get_detections(db: Session = Depends(get_db)):
+    # order query response by id
+    return (db.query(DetectionDB).order_by(DetectionDB.id.desc()).limit(30).all())
+
+
+
+# get detection
+@app.get("/detections/search/", response_model=List[Detection])
+async def get_detection(filename: Union[str, None] = None, db: Session = Depends(get_db)):
+    
+    # create query object
+    q = db.query(DetectionDB)
+
+    # if query exists
+    if filename:
+        # get this query
+        q = q.filter(DetectionDB.filename.contains(filename))
+
+    return q.all()
+
+# post detection
+@app.post("/detection", response_model=Detection)
+async def create_detection(detection: DetectionCreate, db: Session = Depends(get_db)):
+    # create new detection and add to db
+    db_detection = DetectionDB(**detection.dict())
+    db.add(db_detection)
+    db.commit()
+    db.refresh(db_detection)
+    return db_detection
+
+
+# delete detection
+@app.delete("/detections/{detection_id}", response_model=dict)
+def delete_detection(detection_id: int, db: Session = Depends(get_db)):
+
+    # find detection
+    db_det = db.query(DetectionDB).filter(DetectionDB.id == detection_id).first()
+
+    # not found error if there is no such detection
+    if not db_det:
+        raise HTTPException(status_code=404, detail="Detection not found")
+    
+    # deleted object
+    deleted = {
+        "id": db_det.id,
+        "filename": db_det.filename,
+        "detections_json": db_det.detections_json,
+    }
+
+    # delete, commit and 
+    db.delete(db_det)
+    db.commit()
+
+    return deleted
+
+# get detection by id
+@app.get("/detections/{detection_id}", response_model=dict)
+def get_detection(detection_id: int, db: Session = Depends(get_db)):
+
+    # find detection
+    db_det = db.query(DetectionDB).filter(DetectionDB.id == detection_id).first()
+
+    # not found error if there is no such detection
+    if not db_det:
+        raise HTTPException(status_code=404, detail="Detection not found")
+
+    return {
+        "id": db_det.id,
+        "filename": db_det.filename,
+        "detections_json": db_det.detections_json,
+    }

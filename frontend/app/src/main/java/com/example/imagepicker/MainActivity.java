@@ -142,7 +142,7 @@ public class MainActivity extends AppCompatActivity {
 
         // check response
         if (resultCode == RESULT_OK) {
-            
+
             // horizontal rotation problem
             if (image_uri == null) return;
 
