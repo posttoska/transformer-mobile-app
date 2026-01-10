@@ -16,6 +16,7 @@ from model.detr import DETR
 from model.config import CONFIG
 from typing import List, Union
 from fastapi import Depends
+from datetime import datetime
 
 from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, LargeBinary
@@ -103,14 +104,25 @@ async def check_health():
 
 # post image
 @app.post("/post-image")
-async def post_image(file: UploadFile = File(...)) -> list:
+async def post_image(file: UploadFile = File(...), db: Session = Depends(get_db)) -> list:
+
+    # read bytes for db
+    file_bytes = file.file.read()
+
+    # get file extention, or just put .png 
+    # [0] - photo; [1] - extention
+    ext = os.path.splitext(file.filename)[1] or ".png"
+    # get datetime
+    dt = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    # form file name
+    saved_filename = f"{dt}{ext}"
 
     # save file from frontend
-    with open(file.filename, "wb") as buffer:
-        buffer.write(file.file.read())
+    with open(saved_filename, "wb") as buffer:
+        buffer.write(file_bytes)
 
     # read saved file as image
-    image = cv2.imread(file.filename)
+    image = cv2.imread(saved_filename)
 
     # change cv2's BGR image to RGB image
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -153,7 +165,19 @@ async def post_image(file: UploadFile = File(...)) -> list:
     # LOGGING
     print(output_list)
 
-    # get prediction back
+    # save prediction to database
+    
+    db_det = DetectionDB(
+        filename=saved_filename,
+        image_bytes=file_bytes,
+        detections_json=json.dumps(output_list),
+    )
+    # commit and refresh
+    db.add(db_det)
+    db.commit()
+    db.refresh(db_det)
+
+    # get prediction back to frontend
     return output_list
 
 def model_call(input_tensor):
